@@ -1,0 +1,40 @@
+version: 2
+
+sources:
+  - name: customer_data
+    database: RAW_DATABASE
+    schema: CUSTOMER_DATA
+    tables:
+      - name: customers
+      - name: customer_feedbacks
+
+  - name: sales
+    database: RAW_DATABASE
+    schema: SALES
+    tables:
+      - name: ticket_sales_online
+      - name: ticket_sales_physical
+      - name: merchandise_sales_online
+      - name: merchandise_sales_physical
+
+  - name: park_assets
+    database: RAW_DATABASE
+    schema: PARK_ASSETS
+    tables:
+      - name: ticket_types
+      - name: rides
+      - name: ops_rides
+      - name: marketing_rides
+      - name: merchandise_products
+      - name: weather_data
+
+  - name: park_internal
+    database: RAW_DATABASE
+    schema: PARK_INTERNAL
+    tables:
+      - name: electricity_costs
+      - name: maintenance_costs
+      - name: supplies_costs
+      - name: staff_costs
+      - name: safety_incidents
+      - name: checkins

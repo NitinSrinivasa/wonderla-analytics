@@ -1,0 +1,20 @@
+select
+    try_to_number(customer_id) as customer_id,
+    first_name,
+    last_name,
+    email,
+    phone,
+    address,
+    city,
+    state,
+    pin_code,
+    try_to_number(age) as age,
+    gender,
+    try_to_boolean(is_vip_member) as is_vip_member,
+    try_to_boolean(marketing_opt_in) as marketing_opt_in,
+    preferred_thrill_level,
+    try_to_number(loyalty_points) as loyalty_points,
+    try_to_date(registration_date) as registration_date,
+    created_at,
+    updated_at
+from {{ source('customer_data', 'customers') }}
