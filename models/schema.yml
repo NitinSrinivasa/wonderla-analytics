@@ -1,0 +1,60 @@
+version: 2
+
+models:
+  - name: dim_customers
+    description: Customer dimension containing SCD Type 2 history.
+    columns:
+      - name: customer_version_key
+        tests:
+          - unique
+          - not_null
+
+      - name: customer_id
+        tests:
+          - not_null
+
+  - name: dim_rides
+    columns:
+      - name: ride_id
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_ticket_types
+    columns:
+      - name: ticket_id
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_merchandise_products
+    columns:
+      - name: product_id
+        tests:
+          - unique
+          - not_null
+
+  - name: fact_ticket_sales
+    columns:
+      - name: sale_id
+        tests:
+          - not_null
+
+      - name: customer_id
+        tests:
+          - relationships:
+              to: ref('dim_customers')
+              field: customer_id
+
+  - name: fact_merchandise_sales
+    columns:
+      - name: sale_id
+        tests:
+          - not_null
+
+  - name: fact_checkins
+    columns:
+      - name: checkin_id
+        tests:
+          - unique
+          - not_null
