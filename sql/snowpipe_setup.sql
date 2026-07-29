@@ -1,0 +1,208 @@
+-- Wonderla Snowpipe setup
+-- Replace <AWS_ROLE_ARN> and <BUCKET_NAME> before running.
+
+USE ROLE ACCOUNTADMIN;
+USE WAREHOUSE COMPUTE_WH;
+
+-- =====================================================
+-- 1. CSV file format
+-- =====================================================
+
+CREATE OR REPLACE FILE FORMAT RAW_DATABASE.CUSTOMER_DATA.CSV_FORMAT
+    TYPE = CSV
+    FIELD_DELIMITER = ','
+    SKIP_HEADER = 1
+    FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+    NULL_IF = ('', 'NULL', 'null')
+    TRIM_SPACE = TRUE;
+
+
+-- =====================================================
+-- 2. AWS S3 storage integration
+-- =====================================================
+
+CREATE OR REPLACE STORAGE INTEGRATION WONDERLA_S3_INT
+    TYPE = EXTERNAL_STAGE
+    STORAGE_PROVIDER = S3
+    ENABLED = TRUE
+    STORAGE_AWS_ROLE_ARN = '<AWS_ROLE_ARN>'
+    STORAGE_ALLOWED_LOCATIONS = (
+        's3://<BUCKET_NAME>/incoming/'
+    );
+
+-- Run this command to get the Snowflake IAM user ARN
+-- and external ID needed for the AWS role trust policy.
+DESC INTEGRATION WONDERLA_S3_INT;
+
+
+-- =====================================================
+-- 3. External S3 stage
+-- =====================================================
+
+CREATE OR REPLACE STAGE RAW_DATABASE.CUSTOMER_DATA.WONDERLA_S3_STAGE
+    URL = 's3://<BUCKET_NAME>/incoming/'
+    STORAGE_INTEGRATION = WONDERLA_S3_INT
+    FILE_FORMAT = RAW_DATABASE.CUSTOMER_DATA.CSV_FORMAT;
+
+-- Check which files Snowflake can see in S3.
+LIST @RAW_DATABASE.CUSTOMER_DATA.WONDERLA_S3_STAGE;
+
+
+-- =====================================================
+-- 4. Destination tables for Snowpipe ingestion
+-- =====================================================
+
+CREATE OR REPLACE TABLE
+    RAW_DATABASE.CUSTOMER_DATA.CUSTOMERS_INGESTION_TEST
+LIKE
+    RAW_DATABASE.CUSTOMER_DATA.CUSTOMERS;
+
+CREATE OR REPLACE TABLE
+    RAW_DATABASE.SALES.TICKET_SALES_ONLINE_SNOWPIPE
+LIKE
+    RAW_DATABASE.SALES.TICKET_SALES_ONLINE;
+
+CREATE OR REPLACE TABLE
+    RAW_DATABASE.SALES.TICKET_SALES_PHYSICAL_SNOWPIPE
+LIKE
+    RAW_DATABASE.SALES.TICKET_SALES_PHYSICAL;
+
+CREATE OR REPLACE TABLE
+    RAW_DATABASE.SALES.MERCHANDISE_SALES_ONLINE_SNOWPIPE
+LIKE
+    RAW_DATABASE.SALES.MERCHANDISE_SALES_ONLINE;
+
+CREATE OR REPLACE TABLE
+    RAW_DATABASE.SALES.MERCHANDISE_SALES_PHYSICAL_SNOWPIPE
+LIKE
+    RAW_DATABASE.SALES.MERCHANDISE_SALES_PHYSICAL;
+
+
+-- =====================================================
+-- 5. Customers pipe
+-- =====================================================
+
+CREATE OR REPLACE PIPE
+    RAW_DATABASE.CUSTOMER_DATA.CUSTOMERS_TEST_PIPE
+    AUTO_INGEST = FALSE
+AS
+COPY INTO RAW_DATABASE.CUSTOMER_DATA.CUSTOMERS_INGESTION_TEST
+FROM @RAW_DATABASE.CUSTOMER_DATA.WONDERLA_S3_STAGE/snowpipe/
+FILE_FORMAT = (
+    FORMAT_NAME = RAW_DATABASE.CUSTOMER_DATA.CSV_FORMAT
+);
+
+
+-- =====================================================
+-- 6. Ticket sales pipes
+-- =====================================================
+
+CREATE OR REPLACE PIPE
+    RAW_DATABASE.SALES.TICKET_SALES_ONLINE_PIPE
+    AUTO_INGEST = FALSE
+AS
+COPY INTO RAW_DATABASE.SALES.TICKET_SALES_ONLINE_SNOWPIPE
+FROM @RAW_DATABASE.CUSTOMER_DATA.WONDERLA_S3_STAGE/snowpipe/ticket_sales_online/
+FILE_FORMAT = (
+    FORMAT_NAME = RAW_DATABASE.CUSTOMER_DATA.CSV_FORMAT
+);
+
+
+CREATE OR REPLACE PIPE
+    RAW_DATABASE.SALES.TICKET_SALES_PHYSICAL_PIPE
+    AUTO_INGEST = FALSE
+AS
+COPY INTO RAW_DATABASE.SALES.TICKET_SALES_PHYSICAL_SNOWPIPE
+FROM @RAW_DATABASE.CUSTOMER_DATA.WONDERLA_S3_STAGE/snowpipe/ticket_sales_physical/
+FILE_FORMAT = (
+    FORMAT_NAME = RAW_DATABASE.CUSTOMER_DATA.CSV_FORMAT
+);
+
+
+-- =====================================================
+-- 7. Merchandise sales pipes
+-- =====================================================
+
+CREATE OR REPLACE PIPE
+    RAW_DATABASE.SALES.MERCHANDISE_SALES_ONLINE_PIPE
+    AUTO_INGEST = FALSE
+AS
+COPY INTO RAW_DATABASE.SALES.MERCHANDISE_SALES_ONLINE_SNOWPIPE
+FROM @RAW_DATABASE.CUSTOMER_DATA.WONDERLA_S3_STAGE/snowpipe/merchandise_sales_online/
+FILE_FORMAT = (
+    FORMAT_NAME = RAW_DATABASE.CUSTOMER_DATA.CSV_FORMAT
+);
+
+
+CREATE OR REPLACE PIPE
+    RAW_DATABASE.SALES.MERCHANDISE_SALES_PHYSICAL_PIPE
+    AUTO_INGEST = FALSE
+AS
+COPY INTO RAW_DATABASE.SALES.MERCHANDISE_SALES_PHYSICAL_SNOWPIPE
+FROM @RAW_DATABASE.CUSTOMER_DATA.WONDERLA_S3_STAGE/snowpipe/merchandise_sales_physical/
+FILE_FORMAT = (
+    FORMAT_NAME = RAW_DATABASE.CUSTOMER_DATA.CSV_FORMAT
+);
+
+
+-- =====================================================
+-- 8. Process files already present in S3
+-- =====================================================
+
+ALTER PIPE
+    RAW_DATABASE.CUSTOMER_DATA.CUSTOMERS_TEST_PIPE
+REFRESH;
+
+ALTER PIPE
+    RAW_DATABASE.SALES.TICKET_SALES_ONLINE_PIPE
+REFRESH;
+
+ALTER PIPE
+    RAW_DATABASE.SALES.TICKET_SALES_PHYSICAL_PIPE
+REFRESH;
+
+ALTER PIPE
+    RAW_DATABASE.SALES.MERCHANDISE_SALES_ONLINE_PIPE
+REFRESH;
+
+ALTER PIPE
+    RAW_DATABASE.SALES.MERCHANDISE_SALES_PHYSICAL_PIPE
+REFRESH;
+
+
+-- =====================================================
+-- 9. Verify the loaded row counts
+-- =====================================================
+
+SELECT
+    'customers' AS dataset,
+    COUNT(*) AS row_count
+FROM RAW_DATABASE.CUSTOMER_DATA.CUSTOMERS_INGESTION_TEST
+
+UNION ALL
+
+SELECT
+    'ticket_sales_online',
+    COUNT(*)
+FROM RAW_DATABASE.SALES.TICKET_SALES_ONLINE_SNOWPIPE
+
+UNION ALL
+
+SELECT
+    'ticket_sales_physical',
+    COUNT(*)
+FROM RAW_DATABASE.SALES.TICKET_SALES_PHYSICAL_SNOWPIPE
+
+UNION ALL
+
+SELECT
+    'merchandise_sales_online',
+    COUNT(*)
+FROM RAW_DATABASE.SALES.MERCHANDISE_SALES_ONLINE_SNOWPIPE
+
+UNION ALL
+
+SELECT
+    'merchandise_sales_physical',
+    COUNT(*)
+FROM RAW_DATABASE.SALES.MERCHANDISE_SALES_PHYSICAL_SNOWPIPE;
